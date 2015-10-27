@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
 VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TP4", "TP4\TP4.vcxproj", "{EE5F6D6B-2B87-4D8D-B32D-8EB06863013F}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ServeurTP4", "ServeurTP4\ServeurTP4.vcxproj", "{EA547B03-9965-4F80-ACB0-B18CCD5DA4AD}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ClientTP4", "ClientTP4\ClientTP4.vcxproj", "{D5F9EB81-B2D0-4411-BDDA-78B83C70745E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +13,14 @@ Global
 		Release|Win32 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{EE5F6D6B-2B87-4D8D-B32D-8EB06863013F}.Debug|Win32.ActiveCfg = Debug|Win32
-		{EE5F6D6B-2B87-4D8D-B32D-8EB06863013F}.Debug|Win32.Build.0 = Debug|Win32
-		{EE5F6D6B-2B87-4D8D-B32D-8EB06863013F}.Release|Win32.ActiveCfg = Release|Win32
-		{EE5F6D6B-2B87-4D8D-B32D-8EB06863013F}.Release|Win32.Build.0 = Release|Win32
+		{EA547B03-9965-4F80-ACB0-B18CCD5DA4AD}.Debug|Win32.ActiveCfg = Debug|Win32
+		{EA547B03-9965-4F80-ACB0-B18CCD5DA4AD}.Debug|Win32.Build.0 = Debug|Win32
+		{EA547B03-9965-4F80-ACB0-B18CCD5DA4AD}.Release|Win32.ActiveCfg = Release|Win32
+		{EA547B03-9965-4F80-ACB0-B18CCD5DA4AD}.Release|Win32.Build.0 = Release|Win32
+		{D5F9EB81-B2D0-4411-BDDA-78B83C70745E}.Debug|Win32.ActiveCfg = Debug|Win32
+		{D5F9EB81-B2D0-4411-BDDA-78B83C70745E}.Debug|Win32.Build.0 = Debug|Win32
+		{D5F9EB81-B2D0-4411-BDDA-78B83C70745E}.Release|Win32.ActiveCfg = Release|Win32
+		{D5F9EB81-B2D0-4411-BDDA-78B83C70745E}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
