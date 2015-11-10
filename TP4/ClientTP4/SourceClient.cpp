@@ -32,9 +32,10 @@ int __cdecl main(int argc, char **argv)
 	int recvbuflen = DEFAULT_BUFLEN;
 
 	// Validate the parameters
-	string serverAddr;
-	cout << "Server address:" << endl;
-	cin >> serverAddr;
+	string serverAddr = "132.207.29.125";
+	cout << "Server address:" << serverAddr<< endl;
+	//cin >> serverAddr;
+
 
 
 	// Initialize Winsock
@@ -82,12 +83,30 @@ int __cdecl main(int argc, char **argv)
 		break;
 	}
 
+	//------------------------------
+	// Maintenant, on va recevoir la taille du char* contenant le nom des candidats
+	char tailleCandidat[1];
+	char* candidatCStr;
+	iResult = recv(ConnectSocket, tailleCandidat, 1, 0);
+	if (iResult > 0) {
+		// Maintenant, on va recevoir le char* contenant le nom des candidats
+		candidatCStr = new char[(int)(tailleCandidat[0])];
+		iResult = recv(ConnectSocket, candidatCStr, (int)(tailleCandidat[0]), 0);
+		for (int i = 0; i < (int)(tailleCandidat[0]); ++i)
+			cout << candidatCStr[i];
+	}
+	else {
+		printf("Erreur de reception : %d\n", WSAGetLastError());
+	}
+
+
 	freeaddrinfo(result);
 
 
 	if (ConnectSocket == INVALID_SOCKET) {
 		cout << "Unable to connect to server!" << endl;
 		WSACleanup();
+		//getchar();
 		return 1;
 	}
 	/*
