@@ -24,7 +24,7 @@ DWORD WINAPI CheckClock(void* setOfListenSockets);
 char* GetCandidatestring(std::map<std::string, int>* m);
 bool GetCandidates(std::string nomFichier, std::map<std::string, int>* m);
 DWORD WINAPI ProcessVoter(void* param);
-
+std::string GetCurrentDateTime();
 // global variables
 std::map<std::string, int>* candidates;
 std::mutex vote_mutex;
@@ -38,6 +38,7 @@ struct processParameters
 	SOCKET socket;
 	char* candidateNames;
 	int sizeOfCandidateNames;
+	std::string ipClient;
 };
 
 int main(void)
@@ -114,14 +115,25 @@ int main(void)
 			if (r > 0)
 			{
 				// accept connection
-				ClientSocket = accept(listenSockets[i], NULL, NULL);
+				sockaddr_in sinRemote;
+				int nAddrSize = sizeof(sinRemote);
+				char ipstr[INET_ADDRSTRLEN + 1];
+				int port = i +5000;
 
-				*param = { ClientSocket, candidateCstr, strlen(candidateCstr) };
+				ClientSocket = accept(listenSockets[i], (sockaddr*)&sinRemote, &nAddrSize);
+
+				
+				std::string ipClient = inet_ntop(AF_INET, &sinRemote.sin_addr, ipstr, sizeof(sockaddr_in));
+				ipClient += ":" + std::to_string(5000 + i);
+				////
+
+				*param = { ClientSocket, candidateCstr, strlen(candidateCstr), ipClient };
 				if (ClientSocket == INVALID_SOCKET) {
 					std::cout << "accept failed: " << WSAGetLastError() << std::endl;
 					WSACleanup();
 					ended = true;
 				}
+				
 				// Create a thread to process the connection
 				DWORD nThreadID;
 				CreateThread(0, 0, ProcessVoter, (void*)param, 0, &nThreadID);
@@ -146,6 +158,12 @@ int main(void)
 		}
 	}
 	std::cout << "End of elections. Winner of election is " << winner << "!!!!!!!!" << std::endl;
+
+	std::cout << "Detailed results:" << std::endl;
+	for (auto it = candidates->begin(); (it != candidates->end()); it++)
+	{
+		std::cout << it->first << " : " << std::to_string(it->second) << " votes" << std::endl;
+	}
 
 	// clean up
 	delete candidateCstr;
@@ -265,9 +283,7 @@ DWORD WINAPI ProcessVoter(void* param)
 		return 1;
 	}
 
-
-	// recevoir vote et comptabiliser
-	//http://en.cppreference.com/w/cpp/thread/mutex
+	// receive vote and count vote	
 	char choiceChar;
 	int iResult3 = recv(castedParameters->socket, &choiceChar, 1, 0);
 	std::cout << "Received vote : " << ((int)choiceChar) << std::endl;
@@ -279,7 +295,23 @@ DWORD WINAPI ProcessVoter(void* param)
 
 	std::lock_guard<std::mutex> guard(vote_mutex); // take ownership of mutex
 	it->second++;
-	//the mutex is automatically released when the function ends
+	// write to journal
+	std::ofstream outfile;
+	outfile.open("journalDeVoteurs.txt", std::ios_base::app);
+	outfile << castedParameters->ipClient << " " << GetCurrentDateTime();
 
+	//the mutex is automatically released when the function ends
 	return 0;
+}
+
+// returns current datetime in a string
+std::string GetCurrentDateTime()
+{
+	time_t rawCurrentTime;
+	struct tm timeinfo;
+	time(&rawCurrentTime);
+	localtime_s(&timeinfo, &rawCurrentTime);
+	char convertedTime[256];
+	asctime_s(convertedTime, 256, &timeinfo);
+	return convertedTime;
 }
