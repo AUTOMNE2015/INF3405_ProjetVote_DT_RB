@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <iostream>
 #include <string>
+#include <vector>
+#include <time.h>
 using namespace std;
 
 
@@ -31,8 +33,11 @@ int __cdecl main(int argc, char **argv)
 	int iResult;
 	int recvbuflen = DEFAULT_BUFLEN;
 
+	/* initialize random seed: */
+	srand(time(NULL));
+
 	// Validate the parameters
-	string serverAddr = "132.207.29.125";
+	string serverAddr = "192.168.0.105";//"132.207.29.125";
 	cout << "Server address:" << serverAddr<< endl;
 	//cin >> serverAddr;
 
@@ -82,18 +87,43 @@ int __cdecl main(int argc, char **argv)
 		}
 		break;
 	}
+	//cout << "Ready to receive" << endl;
 
 	//------------------------------
 	// Maintenant, on va recevoir la taille du char* contenant le nom des candidats
 	char tailleCandidat[1];
 	char* candidatCStr;
+
 	iResult = recv(ConnectSocket, tailleCandidat, 1, 0);
-	if (iResult > 0) {
+	if (iResult > 0)
+	{
+		cout << "=========================\nCandidats:" << endl;
 		// Maintenant, on va recevoir le char* contenant le nom des candidats
 		candidatCStr = new char[(int)(tailleCandidat[0])];
 		iResult = recv(ConnectSocket, candidatCStr, (int)(tailleCandidat[0]), 0);
+		vector<string> listCandidat;
+		string tempCandidat = "";
 		for (int i = 0; i < (int)(tailleCandidat[0]); ++i)
-			cout << candidatCStr[i];
+		{
+			if (candidatCStr[i] == ';' && tempCandidat.size() != 0) 
+			{
+				//jump to next candidat
+				cout << tempCandidat << endl;
+				listCandidat.push_back(tempCandidat);
+				tempCandidat = ""; // reset buffer
+			} 
+			else if (candidatCStr[i] != ';')
+			{
+				tempCandidat += candidatCStr[i];
+			}
+		}
+
+		// Vote random
+		int choice = rand() % listCandidat.size();
+		cout << "Voted for " + listCandidat.at(choice) << endl;
+		// Send vote back...
+		//...
+		
 	}
 	else {
 		printf("Erreur de reception : %d\n", WSAGetLastError());
