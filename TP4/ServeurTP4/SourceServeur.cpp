@@ -10,23 +10,29 @@
 #include <map>
 #include <ctime>
 #include <fstream>
+#include <mutex>
 
-using namespace std;
 #define DEFAULT_PORT "5000"
-
+#define _WINSOCK_DEPRECATED_NO_WARNINGS = 0
 
 
 #pragma comment(lib, "Ws2_32.lib")
 
-#define _WINSOCK_DEPRECATED_NO_WARNINGS = 0
-
-SOCKET CreateSocket(string Socket);
+// forward declarations
+SOCKET CreateSocket(std::string Socket);
 DWORD WINAPI CheckClock(void* setOfListenSockets);
-char* GetCandidateString(map<string, int>* m);
-bool GetCandidates(string nomFichier, map<string, int>* m);
+char* GetCandidatestring(std::map<std::string, int>* m);
+bool GetCandidates(std::string nomFichier, std::map<std::string, int>* m);
 DWORD WINAPI ProcessVoter(void* param);
 
+// global variables
+std::map<std::string, int>* candidates;
+std::mutex vote_mutex;
 
+bool ended = false;
+const double ENDTIME = 60.0; //Election closes in 60 seconds
+
+// structure for passing parameters to threads
 struct processParameters
 {
 	SOCKET socket;
@@ -43,50 +49,48 @@ int main(void)
 	// Initialize Winsock
 	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (iResult != 0) {
-		std::cout << "WSAStartup failed" << endl;
+		std::cout << "WSAStartup failed" << std::endl;
 		while (1);
 		return 1;
 	}
-	std::cout << "WSAStartup success!" << endl;
+	//std::cout << "WSAStartup success!" << std::endl;
 
 	// Open 50 sockets
 	SOCKET listenSockets[50];
-	
 	for (int i = 0; i < 50; ++i)
 	{
-		listenSockets[i] = CreateSocket(to_string(5000 + i));
+		listenSockets[i] = CreateSocket(std::to_string(5000 + i));
 
 		if (listen(listenSockets[i], SOMAXCONN) == SOCKET_ERROR) {
-			std::cout << "Listen failed with error: " << WSAGetLastError() << endl;
+			std::cout << "Listen failed with error: " << WSAGetLastError() << std::endl;
 			closesocket(listenSockets[i]);
 			WSACleanup();
 			while (1);
 			return 1;
 		}
 	}
-	cout << "==================================" << endl;
+
+	// initialize fd_set for sockets
 	fd_set* setOfListenSockets = new fd_set();
-
 	*setOfListenSockets = { 50, *listenSockets };
-	std::cout << "Listen success, waiting for connection..." << endl;
 
-	
-
+	std::cout << "====================================================" << std::endl;
+	std::cout << "Initialization succeeded, waiting for connection..." << std::endl;
 
 	SOCKET ClientSocket;
 	ClientSocket = INVALID_SOCKET;
 
-	// Map de candidats
-	map<string, int>* candidates = new map<string,int>(); 
+	// Map candidats
+	candidates = new std::map<std::string, int>();
 	GetCandidates("fichier.txt", candidates); 
 
 	// Creer un c-string avec tous les candidats
-	string tmpCandidateString = "";
-	for (map<string, int>::iterator it = candidates->begin(); it != candidates->end(); it++)
-		tmpCandidateString += it->first + ";";
+	std::string tmpCandidatestring = "";
+	for (std::map<std::string, int>::iterator it = candidates->begin(); it != candidates->end(); it++)
+		tmpCandidatestring += it->first + ";";
 
 	char* candidateCstr; 
-	candidateCstr = _strdup(tmpCandidateString.c_str()); // duplique le string vers un c string sur le heap
+	candidateCstr = _strdup(tmpCandidatestring.c_str()); // duplique le std::string vers un c-string sur le heap
 
 	// Create timer
 	processParameters* param = new processParameters();
@@ -94,40 +98,66 @@ int main(void)
 	CreateThread(0, 0, CheckClock, (void*)(setOfListenSockets), 0, &ThreadClockID);
 	
 	// Program loop
-	while (1)
+	while (!ended)
 	{
-		//int result = select(0, setOfListenSockets, NULL,NULL,NULL);
-		//if (result != -1)
-			//std::cout << "result" << result << endl;
+		struct timeval timeout;
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 10;
 
-		// Accept a client socket (blocking call)
-		ClientSocket = accept(listenSockets[0], NULL, NULL);
-		
-		*param = { ClientSocket, candidateCstr, strlen(candidateCstr) };
-		// In case of error
-		if (ClientSocket == INVALID_SOCKET) {
-			std::cout << "accept failed: " << WSAGetLastError() << endl;
-			// closesocket(listenSockets[0]);
-			WSACleanup();
-			while (1);
-			return 1;
+		// loop to listen and accept connections
+		fd_set tempSet;
+		for (int i = 0; i < 50; ++i)
+		{
+			FD_ZERO(&tempSet); // clear the set 
+			FD_SET(listenSockets[i], &tempSet); // add our file descriptor to the set
+			int r = select(0, &tempSet, 0, 0, &timeout);
+			if (r > 0)
+			{
+				// accept connection
+				ClientSocket = accept(listenSockets[i], NULL, NULL);
+
+				*param = { ClientSocket, candidateCstr, strlen(candidateCstr) };
+				if (ClientSocket == INVALID_SOCKET) {
+					std::cout << "accept failed: " << WSAGetLastError() << std::endl;
+					WSACleanup();
+					ended = true;
+				}
+				// Create a thread to process the connection
+				DWORD nThreadID;
+				CreateThread(0, 0, ProcessVoter, (void*)param, 0, &nThreadID);
+			}
 		}
-		// Create a thread to process the connection
-		DWORD nThreadID;
-		CreateThread(0, 0, ProcessVoter, (void*)param, 0, &nThreadID);
-		//ProcessVoter((void*)param);
-	//std::cout << "accept success!" << endl;
+		//std::cout << "accept success!" << std::endl;
 	}
 
+	// close sockets
+	for (int i = 0; i < 50; ++i)
+		closesocket(setOfListenSockets->fd_array[i]);
+
+	// Get winning candidate after timeout
+	int max = candidates->begin()->second;
+	std::string winner = candidates->begin()->first;
+	for (auto it = candidates->begin(); (it != candidates->end()); it++)
+	{
+		if (it->second > max)
+		{
+			max = it->second;
+			winner = it->first;
+		}
+	}
+	std::cout << "End of elections. Winner of election is " << winner << "!!!!!!!!" << std::endl;
+
+	// clean up
 	delete candidateCstr;
 	delete candidates;
 	delete setOfListenSockets;
-	
 
+	system("pause");
 	return 0;
 }
 
-SOCKET CreateSocket(string port)
+//Function to create socket on a specified port
+SOCKET CreateSocket(std::string port)
 {
 	struct addrinfo *result = NULL, *ptr = NULL, hints;
 
@@ -139,32 +169,28 @@ SOCKET CreateSocket(string port)
 
 	int iResult;
 	// Resolve the local address and port to be used by the server
-	iResult = getaddrinfo(NULL, port.c_str(), &hints, &result); //"132.207.29.125"
+	iResult = getaddrinfo(NULL, port.c_str(), &hints, &result);
 	if (iResult != 0) {
-		cout << "getaddrinfo failed" << endl;
+		std::cout << "getaddrinfo failed" << std::endl;
 		WSACleanup();
 		return INVALID_SOCKET;
 	}
-	cout << "getaddrinfo success!" << endl;
-
 
 	// initialize Socket
 	SOCKET ListenSocket = INVALID_SOCKET;
-
 	ListenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
 
 	if (ListenSocket == INVALID_SOCKET) {
-		cout << "Error at socket() function" << endl;
+		std::cout << "Error at socket() function" << std::endl;
 		freeaddrinfo(result);
 		WSACleanup();
 		return INVALID_SOCKET;
 	}
-	cout << "Success at socket() function!" << endl;
 
 	// Bind socket to ip address :
 	iResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
 	if (iResult == SOCKET_ERROR) {
-		cout << "bind failed with error" << endl;
+		std::cout << "bind failed with error" << std::endl;
 		freeaddrinfo(result);
 		closesocket(ListenSocket);
 		WSACleanup();
@@ -173,54 +199,48 @@ SOCKET CreateSocket(string port)
 	// no need of result anymore
 	freeaddrinfo(result);
 
-	cout << "bind success!" << endl;
 	return ListenSocket;
 }
 
-bool GetCandidates(string nomFichier, map<string,int>* m)
+// function to read candiates from file and populate candidate map
+bool GetCandidates(std::string nomFichier, std::map<std::string,int>* m)
 {
-	string result = "";
-	string tmp;
-	ifstream file;
+	std::string tmp;
+	std::ifstream file;
 	file.open(nomFichier);
 	if (!file.good())
 	{
-		cout << "File not found" << endl;
+		std::cout << "File not found" << std::endl;
 		return false;
 	}
 	while (!file.eof())
 	{
 		std::getline(file, tmp, ';');
-		m->insert({ tmp, 0 });
+		if (tmp.size() != 0) { m->insert({ tmp, 0 }); }
 	}
 	return true;
 }
 
+// function to check if time is expired
 DWORD WINAPI CheckClock(void* setOfListenSockets)
 {
 	double startTime = clock() / (double)CLOCKS_PER_SEC;
-	const double endTime = 120;
 	double currentTime = clock() / (double)CLOCKS_PER_SEC - startTime;
-	while (endTime > currentTime)
+	while (ENDTIME > currentTime)
 	{
 		currentTime = clock() / (double)CLOCKS_PER_SEC - startTime;
 	}
-	cout << "TIMEOUT" << endl;
-	fd_set* tmp;
-	tmp = (fd_set*)setOfListenSockets;
-	for (int i = 0; i < 50; ++i)
-		closesocket(tmp->fd_array[i]);
 
+	ended = true;
 	return 0;
 }
 
+// function to allow client to vote for a candidate
 DWORD WINAPI ProcessVoter(void* param)
 {
-	//-----------------------------
-	// Envoyer le mot au serveur
 	processParameters* castedParameters = (processParameters*)param;
 
-	// envoie de la taille de la liste des candidats
+	// send size of the string containing all candidates that will be sent in the next send
 	char nb = castedParameters->sizeOfCandidateNames;
 	int iResult1 = send(castedParameters->socket, &nb, 1, 0);
 	if (iResult1 == SOCKET_ERROR) {
@@ -232,8 +252,8 @@ DWORD WINAPI ProcessVoter(void* param)
 
 		return 1;
 	}
-	printf("Nombre d'octets envoyes : %ld\n", iResult1);
-	//envoie du char* contenant le noms des tous les candidats
+
+	//Send candidate name in char*
 	int iResult2 = send(castedParameters->socket, castedParameters->candidateNames, castedParameters->sizeOfCandidateNames, 0);
 	if (iResult2 == SOCKET_ERROR) {
 		printf("Erreur du send: %d\n", WSAGetLastError());
@@ -245,9 +265,21 @@ DWORD WINAPI ProcessVoter(void* param)
 		return 1;
 	}
 
-	printf("Nombre d'octets envoyes : %ld\n", iResult2);
 
 	// recevoir vote et comptabiliser
 	//http://en.cppreference.com/w/cpp/thread/mutex
+	char choiceChar;
+	int iResult3 = recv(castedParameters->socket, &choiceChar, 1, 0);
+	std::cout << "Received vote : " << ((int)choiceChar) << std::endl;
+	auto it = candidates->begin();
+	for (int i = 0; (it != candidates->end()) && (i < (int)choiceChar); i++)
+	{
+		it++;
+	}
+
+	std::lock_guard<std::mutex> guard(vote_mutex); // take ownership of mutex
+	it->second++;
+	//the mutex is automatically released when the function ends
+
 	return 0;
 }

@@ -33,23 +33,27 @@ int __cdecl main(int argc, char **argv)
 	int iResult;
 	int recvbuflen = DEFAULT_BUFLEN;
 
-	/* initialize random seed: */
+	// initialize random seed: 
 	srand(time(NULL));
 
 	// Validate the parameters
-	string serverAddr = "192.168.0.105";//"132.207.29.125";
+	
+	string serverAddr = "132.207.29.125";
+	cout << "Enter desired a valid ip address (EXAMPLE : 132.207.29.125) \n";
+	cin >> serverAddr;
+	cout << endl;
 	cout << "Server address:" << serverAddr<< endl;
-	//cin >> serverAddr;
-
-
+	string port;
+	cout << "Enter desired port between 5000 and 5050: ";
+	cin >> port;
+	cout << endl;
 
 	// Initialize Winsock
 	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (iResult != 0) {
 		cout << "WSAStartup failed with error" << endl;
-		return 1;
+		system("pause"); return 1;
 	}
-	cout << "WSAStartup success!" << endl;
 
 	ZeroMemory(&hints, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
@@ -57,13 +61,12 @@ int __cdecl main(int argc, char **argv)
 	hints.ai_protocol = IPPROTO_TCP;
 
 	// Resolve the server address and port
-	iResult = getaddrinfo(serverAddr.c_str(), DEFAULT_PORT, &hints, &result);
+	iResult = getaddrinfo(serverAddr.c_str(), port.c_str(), &hints, &result);
 	if (iResult != 0) {
 		cout << "getaddrinfo failed with error" << endl;
 		WSACleanup();
-		return 1;
+		system("pause"); return 1;
 	}
-	cout << "getaddrinfo success!" << endl;
 
 	// Attempt to connect to an address until one succeeds
 	for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
@@ -74,9 +77,9 @@ int __cdecl main(int argc, char **argv)
 		if (ConnectSocket == INVALID_SOCKET) {
 			cout << "socket failed with error" << WSAGetLastError() << endl;
 			WSACleanup();
-			return 1;
+			system("pause"); return 1;
 		}
-		cout << "socket success!" << endl;
+		
 
 		// Connect to server.
 		iResult = connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
@@ -87,18 +90,15 @@ int __cdecl main(int argc, char **argv)
 		}
 		break;
 	}
-	//cout << "Ready to receive" << endl;
 
-	//------------------------------
-	// Maintenant, on va recevoir la taille du char* contenant le nom des candidats
 	char tailleCandidat[1];
 	char* candidatCStr;
-
+	// receive the size of candidate string list
 	iResult = recv(ConnectSocket, tailleCandidat, 1, 0);
 	if (iResult > 0)
 	{
 		cout << "=========================\nCandidats:" << endl;
-		// Maintenant, on va recevoir le char* contenant le nom des candidats
+		// receive string containing the name of all candidate
 		candidatCStr = new char[(int)(tailleCandidat[0])];
 		iResult = recv(ConnectSocket, candidatCStr, (int)(tailleCandidat[0]), 0);
 		vector<string> listCandidat;
@@ -123,7 +123,19 @@ int __cdecl main(int argc, char **argv)
 		cout << "Voted for " + listCandidat.at(choice) << endl;
 		// Send vote back...
 		//...
-		
+		char choiceChar = (char)choice;
+		// Send an initial buffer
+		iResult = send(ConnectSocket, &choiceChar, 1, 0);
+		if (iResult == SOCKET_ERROR) {
+			printf("send failed with error: %d\n", WSAGetLastError());
+			closesocket(ConnectSocket);
+			WSACleanup();
+			system("pause"); return 1;
+		}
+
+		printf("Choice Sent with %ld bits\n", iResult);
+	
+
 	}
 	else {
 		printf("Erreur de reception : %d\n", WSAGetLastError());
@@ -136,21 +148,9 @@ int __cdecl main(int argc, char **argv)
 	if (ConnectSocket == INVALID_SOCKET) {
 		cout << "Unable to connect to server!" << endl;
 		WSACleanup();
-		//getchar();
-		return 1;
+		system("pause"); return 1;
 	}
-	/*
-	// Send an initial buffer
-	iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
-	if (iResult == SOCKET_ERROR) {
-		printf("send failed with error: %d\n", WSAGetLastError());
-		closesocket(ConnectSocket);
-		WSACleanup();
-		return 1;
-	}
-
-	printf("Bytes Sent: %ld\n", iResult);
-	*/
+	
 
 	// shutdown the connection since no more data will be sent
 	iResult = shutdown(ConnectSocket, SD_SEND);
@@ -158,7 +158,7 @@ int __cdecl main(int argc, char **argv)
 		printf("shutdown failed with error: %d\n", WSAGetLastError());
 		closesocket(ConnectSocket);
 		WSACleanup();
-		return 1;
+		system("pause"); return 1;
 	}
 
 
@@ -166,7 +166,5 @@ int __cdecl main(int argc, char **argv)
 	closesocket(ConnectSocket);
 	WSACleanup();
 
-	while (1);
-
-	return 0;
+	system("pause"); return 0;
 }
